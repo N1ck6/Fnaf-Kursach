@@ -669,29 +669,6 @@ void onKeyPress(OpenGL* sender, KeyEventArg arg)
     auto key = LOWORD(MapVirtualKeyA(arg.key, MAPVK_VK_TO_CHAR));
     switch (key)
     {
-    case 'T':
-    case 't':
-        testMode = !testMode;
-        if (testMode)
-        {
-            testCamX = 0.0f;
-            testCamY = 1.5f;
-            testCamZ = -0.5f;
-            cameraPitch = 0.0f;
-            cameraYaw = 0.0f;
-            prevMouseX = -1;
-            prevMouseY = -1;
-            skipNextWarp = false;
-            monitorOpen = false;
-            ShowCursor(FALSE);
-        }
-        else
-        {
-            cameraYaw = 0.0f;
-            cameraPitch = 0.0f;
-            ShowCursor(TRUE);
-        }
-        break;
     case 'E':
     case 'e':
         if (!testMode && !gameOver && !monitorOpen)
