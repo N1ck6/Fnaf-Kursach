@@ -2,7 +2,6 @@
 #include <cstdlib>
 #include <string>
 #include <windows.h>
-#include <stdio.h>
 
 #pragma comment(lib, "winmm.lib")
 
@@ -53,6 +52,7 @@ float testCamZ = -0.5f;
 int prevMouseX = -1;
 int prevMouseY = -1;
 bool skipNextWarp = false;
+float hoverMouseX = -1.0f;
 
 int animatronicSide = 0;
 float corridorTimer = 0.0f;
@@ -60,8 +60,8 @@ float doorCloseTimer = 0.0f;
 float flashTimer = 0.0f;
 int flashSide = 0;
 float gameOverTimer = 0.0f;
-
-std::wstring camLabelText;
+int rightDoorOpenCount = 0;
+int leftDoorOpenCount = 0;
 
 float rightDoorClosedTimer = 0.0f;
 float leftDoorClosedTimer = 0.0f;
@@ -404,7 +404,7 @@ void drawFan(float view_matrix[16])
     glTranslated(0.0f, 0.85f, 1.0f);
     glScaled(0.5f, 0.5f, 0.5f);
     glPushMatrix();
-    glScaled(0.6f, 1.0f, 1.0f);
+    glScaled(0.4f, 1.1f, 0.8f);
     fanBase.Draw();
     glPopMatrix();
 
@@ -478,7 +478,7 @@ void drawMonitor()
 
 void drawScreamer()
 {
-    if (animState != STATE_ATTACK || stateTimer >= 4.0f) return;
+    if (animState != STATE_ATTACK || stateTimer >= 3.0f) return;
 
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);
@@ -538,6 +538,8 @@ void resetGame()
     gameOverTimer = 0.0f;
     rightDoorClosedTimer = 0.0f;
     leftDoorClosedTimer = 0.0f;
+    rightDoorOpenCount = 0;
+    leftDoorOpenCount = 0;
 }
 
 void updateAnimatronic(float dt)
@@ -590,7 +592,6 @@ void updateAnimatronic(float dt)
         leftDoorClosedTimer = 0.0f;
     }
 
-
     stateTimer += dt;
 
     switch (animState)
@@ -612,7 +613,6 @@ void updateAnimatronic(float dt)
                 animatronicSide = (rand() % 2 == 0) ? 1 : -1;
             flashTimer = 0.6f;
             flashSide = animatronicSide;
-
             playComeInSound();
         }
         break;
@@ -620,7 +620,18 @@ void updateAnimatronic(float dt)
     case STATE_CORRIDOR:
     {
         bool doorOpen = (animatronicSide == 1) ? rightDoorOpen : leftDoorOpen;
-        if (doorOpen)
+        int openCount = (animatronicSide == 1) ? rightDoorOpenCount : leftDoorOpenCount;
+        if (openCount >= 6)
+        {
+            animState = STATE_ATTACK;
+            stateTimer = 0.0f;
+            corridorTimer = 0.0f;
+            doorCloseTimer = 0.0f;
+            gameOver = true;
+            gameOverTimer = 0.0f;
+            playScreamerSound();
+        }
+        else if (doorOpen)
         {
             doorCloseTimer = 0.0f;
             corridorTimer += dt;
@@ -645,6 +656,8 @@ void updateAnimatronic(float dt)
                 stateTimer = 0.0f;
                 corridorTimer = 0.0f;
                 doorCloseTimer = 0.0f;
+                rightDoorOpenCount = 0;
+                leftDoorOpenCount = 0;
                 flashTimer = 0.6f;
                 flashSide = animatronicSide;
                 int oldSide = animatronicSide;
@@ -669,6 +682,29 @@ void onKeyPress(OpenGL* sender, KeyEventArg arg)
     auto key = LOWORD(MapVirtualKeyA(arg.key, MAPVK_VK_TO_CHAR));
     switch (key)
     {
+    case 'T':
+    case 't':
+        testMode = !testMode;
+        if (testMode)
+        {
+            testCamX = 0.0f;
+            testCamY = 1.5f;
+            testCamZ = -0.5f;
+            cameraPitch = 0.0f;
+            cameraYaw = 0.0f;
+            prevMouseX = -1;
+            prevMouseY = -1;
+            skipNextWarp = false;
+            monitorOpen = false;
+            ShowCursor(FALSE);
+        }
+        else
+        {
+            cameraYaw = 0.0f;
+            cameraPitch = 0.0f;
+            ShowCursor(TRUE);
+        }
+        break;
     case 'E':
     case 'e':
         if (!testMode && !gameOver && !monitorOpen)
@@ -682,7 +718,10 @@ void onKeyPress(OpenGL* sender, KeyEventArg arg)
                     rightDoorClosedTimer = 0.0f;
                     playDoorSound();
                     if (animState == STATE_CORRIDOR && animatronicSide == 1)
+                    {
                         corridorTimer = 0.0f;
+                        rightDoorOpenCount++;
+                    }
                 }
                 else
                 {
@@ -701,7 +740,10 @@ void onKeyPress(OpenGL* sender, KeyEventArg arg)
                     leftDoorClosedTimer = 0.0f;
                     playDoorSound();
                     if (animState == STATE_CORRIDOR && animatronicSide == -1)
+                    {
                         corridorTimer = 0.0f;
+                        leftDoorOpenCount++;
+                    }
                 }
                 else
                 {
@@ -774,23 +816,7 @@ void onMouseMove(OpenGL* sender, MouseEventArg arg)
         return;
     }
 
-    float mx = static_cast<float>(arg.x);
-
-    if (monitorOpen) return;
-
-    int currentWidth = gl.getWidth();
-    if (currentWidth <= 0) currentWidth = 800;
-
-    if (mx < currentWidth * 0.25f)
-    {
-        cameraYaw += 0.5f;
-        if (cameraYaw > 65.0f) cameraYaw = 65.0f;
-    }
-    else if (mx > currentWidth * 0.75f)
-    {
-        cameraYaw -= 0.5f;
-        if (cameraYaw < -65.0f) cameraYaw = -65.0f;
-    }
+    hoverMouseX = static_cast<float>(arg.x);
 }
 
 void initRender()
@@ -891,6 +917,24 @@ void Render(double delta_time)
         }
         if (rightLightOn != oldRightLight || leftLightOn != oldLeftLight)
             playLightSound();
+        int currentWidth = gl.getWidth();
+        if (currentWidth <= 0) currentWidth = 800;
+        float leftZone = currentWidth * 0.20f;
+        float rightZone = currentWidth * 0.80f;
+
+        if (hoverMouseX >= 0.0f)
+        {
+            if (hoverMouseX < leftZone)
+            {
+                cameraYaw += 1.0f;
+                if (cameraYaw > 65.0f) cameraYaw = 65.0f;
+            }
+            else if (hoverMouseX > rightZone)
+            {
+                cameraYaw -= 1.0f;
+                if (cameraYaw < -65.0f) cameraYaw = -65.0f;
+            }
+        }
     }
 
     glMatrixMode(GL_MODELVIEW);
